@@ -176,8 +176,17 @@ jobs:
           </script>
           </html>
           EOF
-      - name: Instalar SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+            - name: Instalar SDK
+        
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_HOME="$SDK"
+          export ANDROID_SDK_ROOT="$SDK"
+          MANAGER=$(find "$SDK" -name sdkmanager -type f | head -n 1)
+          test -n "$MANAGER"
+          "$MANAGER" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+        
       - name: Compilar APK
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
