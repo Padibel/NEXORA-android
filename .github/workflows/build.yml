@@ -1,1 +1,187 @@
-
+name: Compilar NEXORA APK
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/build.yml']
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Crear NEXORA
+        run: |
+          mkdir -p app/src/main/java/org/nexora/mobile app/src/main/assets
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = 'Nexora'
+          include ':app'
+          EOF
+          cat > app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.7.3' }
+          android {
+            namespace 'org.nexora.mobile'
+            compileSdk 35
+            defaultConfig {
+              applicationId 'org.nexora.mobile'
+              minSdk 23
+              targetSdk 34
+              versionCode 1
+              versionName '4.0'
+            }
+          }
+          EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <uses-permission android:name="android.permission.INTERNET"/>
+          <application android:label="NEXORA ULTRA" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="false">
+          <activity android:name=".MainActivity" android:exported="true">
+          <intent-filter>
+          <action android:name="android.intent.action.MAIN"/>
+          <category android:name="android.intent.category.LAUNCHER"/>
+          </intent-filter>
+          </activity>
+          </application>
+          </manifest>
+          EOF
+          cat > app/src/main/java/org/nexora/mobile/MainActivity.java <<'EOF'
+          package org.nexora.mobile;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.*;
+          import android.content.Intent;
+          import android.net.Uri;
+          public class MainActivity extends Activity {
+            public void onCreate(Bundle b){
+              super.onCreate(b);
+              WebView web=new WebView(this);
+              web.setBackgroundColor(0xff10101c);
+              setContentView(web);
+              web.getSettings().setJavaScriptEnabled(true);
+              web.getSettings().setDomStorageEnabled(true);
+              web.getSettings().setAllowFileAccess(false);
+              web.getSettings().setAllowContentAccess(false);
+              web.setWebViewClient(new WebViewClient(){
+                public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){
+                  Uri u=r.getUrl();
+                  if("https".equals(u.getScheme())){
+                    try{startActivity(new Intent(Intent.ACTION_VIEW,u));}catch(Exception e){}
+                  }
+                  return true;
+                }
+              });
+              web.loadUrl("file:///android_asset/index.html");
+            }
+          }
+          EOF
+          cat > app/src/main/assets/index.html <<'EOF'
+          <!doctype html>
+          <html lang="es">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>NEXORA ULTRA</title>
+          <style>
+          *{box-sizing:border-box}
+          body{background:#10101c;color:white;font:16px system-ui;margin:0;padding:18px}
+          h1{color:#b69aff;letter-spacing:3px}
+          input{width:100%;padding:15px;background:#252438;color:white;border:1px solid #66548b;border-radius:12px}
+          button,a{font:inherit;background:#39265d;color:white;border:0;border-radius:12px;padding:12px;margin:4px;display:inline-block;text-decoration:none}
+          article{background:#201e30;border-radius:16px;padding:16px;margin:12px 0}
+          small{color:#b69aff}
+          nav{margin:15px 0}
+          </style>
+          <h1>◈ NEXORA</h1>
+          <small>ULTRA 4.0 MOBILE</small>
+          <p>Tu universo multimedia</p>
+          <input id="q" placeholder="Buscar contenidos">
+          <nav id="nav"></nav>
+          <main id="list"></main>
+          <script>
+          const data=[
+          ['Cine','Big Buck Bunny','https://www.youtube.com/watch?v=aqz-KE-bpKQ'],
+          ['Cine','Sintel','https://durian.blender.org/'],
+          ['Series','RTVE Play','https://www.rtve.es/play/'],
+          ['Series','Pluto TV','https://pluto.tv/'],
+          ['Música','Jamendo','https://www.jamendo.com/'],
+          ['Música','Free Music Archive','https://freemusicarchive.org/'],
+          ['Podcasts','RTVE Audio','https://www.rtve.es/play/audios/'],
+          ['Podcasts','iVoox','https://www.ivoox.com/'],
+          ['Radio','Radio Nacional','https://www.rtve.es/play/radio/'],
+          ['Radio','Radio Browser','https://www.radio-browser.info/'],
+          ['TV','RTVE Directo','https://www.rtve.es/play/directo/'],
+          ['TV','ARTE','https://www.arte.tv/es/']
+          ];
+          let cat='Todo',fav=[];
+          try{fav=JSON.parse(localStorage.getItem('fav')||'[]')}catch(e){}
+          const nav=document.getElementById('nav');
+          const list=document.getElementById('list');
+          const q=document.getElementById('q');
+          for(const c of ['Todo','Cine','Series','Música','Podcasts','Radio','TV','Favoritos','Servidores']){
+            let b=document.createElement('button');
+            b.textContent=c;
+            b.onclick=()=>{cat=c;draw()};
+            nav.append(b);
+          }
+          function draw(){
+            list.innerHTML='';
+            if(cat==='Servidores'){
+              let i=document.createElement('input');
+              i.placeholder='https://tu-servidor';
+              let b=document.createElement('button');
+              b.textContent='Conectar servidor';
+              b.onclick=()=>{
+                try{
+                  let u=new URL(i.value);
+                  if(u.protocol==='https:')location.href=u.href;
+                  else alert('Utiliza HTTPS');
+                }catch(e){alert('Dirección incorrecta')}
+              };
+              list.append(i,b);
+              return;
+            }
+            data.forEach((d,n)=>{
+              if(cat!=='Todo'&&cat!==d[0]&&!(cat==='Favoritos'&&fav.includes(n)))return;
+              if(!d.join(' ').toLowerCase().includes(q.value.toLowerCase()))return;
+              let a=document.createElement('article');
+              let h=document.createElement('h2');
+              let s=document.createElement('small');
+              let l=document.createElement('a');
+              let b=document.createElement('button');
+              h.textContent=d[1];
+              s.textContent=d[0];
+              l.href=d[2];
+              l.textContent='Abrir';
+              b.textContent=fav.includes(n)?'★':'☆';
+              b.onclick=()=>{
+                fav=fav.includes(n)?fav.filter(x=>x!==n):[...fav,n];
+                try{localStorage.setItem('fav',JSON.stringify(fav))}catch(e){}
+                draw();
+              };
+              a.append(s,h,l,b);
+              list.append(a);
+            });
+          }
+          q.oninput=draw;
+          draw();
+          </script>
+          </html>
+          EOF
+      - name: Instalar SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Compilar APK
+        run: gradle --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEXORA-Android-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
